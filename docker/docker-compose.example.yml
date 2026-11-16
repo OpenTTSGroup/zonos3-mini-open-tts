@@ -1,0 +1,21 @@
+services:
+  zonos3-mini:
+    image: ghcr.io/openttsgroup/zonos3-mini-open-tts:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../voices:/voices:ro
+      - ../cache:/root/.cache
+    environment:
+      ZONOS3_MODEL: Zyphra/ZONOS3-Mini
+      ZONOS3_LANGUAGE: en_us
+      # CPU: remove the deploy section and set ZONOS3_DEVICE: cpu.
+      # Auto speaker mode selects embedding on CPU, reference on CUDA.
+      LOG_LEVEL: info
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
