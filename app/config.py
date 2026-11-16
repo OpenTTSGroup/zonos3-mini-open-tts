@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     zonos3_dtype: Literal["auto", "bfloat16", "float32"] = Field(default="auto", description="LM dtype; auto uses BF16 on supported CUDA devices, FP32 otherwise.")
     zonos3_speaker_mode: Literal["auto", "reference", "embedding"] = Field(default="auto", description="Auto uses reference on CUDA and embedding on CPU.")
     zonos3_language: str = Field(default="en_us", description="Default native language code.")
+    zonos3_pinyin_enabled: bool = Field(default=False, description="Convert bracketed pinyin only when the effective language is cmn.")
+    zonos3_ipa_enabled: bool = Field(default=False, description="Convert {{IPA}} groups in all languages, preserving phonemes and tones.")
     zonos3_max_tokens: int = Field(default=2000, ge=1, le=8192, description="Maximum generated audio rows.")
     zonos3_text_rows: str | None = Field(default=None, description="Extra text rows path/URI; null selects release default, empty disables.")
     voices_dir: str = Field(default="/voices", description="Reference voice directory.")

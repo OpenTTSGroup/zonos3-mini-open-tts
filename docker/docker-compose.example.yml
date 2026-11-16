@@ -9,6 +9,8 @@ services:
     environment:
       ZONOS3_MODEL: Zyphra/ZONOS3-Mini
       ZONOS3_LANGUAGE: en_us
+      # ZONOS3_PINYIN_ENABLED: "true"  # Only effective for language=cmn.
+      # ZONOS3_IPA_ENABLED: "true"  # {{IPA}} groups, all languages.
       # CPU: remove the deploy section and set ZONOS3_DEVICE: cpu.
       # Auto speaker mode selects embedding on CPU, reference on CUDA.
       LOG_LEVEL: info

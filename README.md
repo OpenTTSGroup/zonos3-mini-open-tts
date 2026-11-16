@@ -61,6 +61,8 @@ For CPU remove its GPU `deploy` section and set `ZONOS3_DEVICE=cpu`.
 | `ZONOS3_DTYPE` | `auto` | `auto`, `bfloat16`, `float32`; auto uses BF16 on supported CUDA devices, otherwise FP32; CPU always FP32; applies to LM only |
 | `ZONOS3_SPEAKER_MODE` | `auto` | `reference` on CUDA, `embedding` on CPU; can explicitly select either mode subject to hardware support |
 | `ZONOS3_LANGUAGE` | `en_us` | Default native language code; see `/v1/audio/languages` |
+| `ZONOS3_PINYIN_ENABLED` | `false` | Convert bracketed pinyin to IPA only when the effective language is `cmn` |
+| `ZONOS3_IPA_ENABLED` | `false` | Convert `{{IPA}}` to model phoneme boundaries in all languages |
 | `ZONOS3_MAX_TOKENS` | `2000` | Audio-row budget, 1–8192, further limited by model context; not a character count |
 | `ZONOS3_TEXT_ROWS` | unset | Release extra phoneme/start/pause rows for the default LM; explicit file/`hf://` URI for other LMs; empty disables |
 | `VOICES_DIR` | `/voices` | Read-only voice catalog |
@@ -153,6 +155,70 @@ reference-duration limit. Prefer a short, clean recording of a single speaker.
 Neither clone path consumes a transcript. No prompt cache is maintained by the adapter.
 
 ## Voice Directory
+
+### Optional bracketed pinyin
+
+Set `ZONOS3_PINYIN_ENABLED=true` to enable `[nǐ][hǎo]` / `[nǐ hǎo]` input in
+both speech and clone requests. The request's `language` takes precedence;
+omitted or null language falls back to `ZONOS3_LANGUAGE`. Conversion runs only
+when that resolved language is `cmn`; otherwise input is unchanged.
+
+Each bracket is an independent pronunciation unit. `[nǐ][hǎo]` keeps both third
+tones; `[nǐ hǎo]` changes the first to second tone. Within a consecutive run of
+third tones, all except the last become second tone. No changes cross brackets
+or include surrounding Chinese text. This is a deterministic third-tone rule,
+not grammatical prosody analysis: automatic yi/bu sandhi and half-third tones
+are not implemented. Spell the desired surface tones
+in separate brackets when you need exact application-layer control.
+
+Attached `r` marks erhua: `[huār]` and `[hua1r]` produce the same single
+rhoticized syllable; put a numeric tone **before** the suffix. `[huā ér]` keeps
+two independent syllables, as do `[huā][ér]`; standalone `ér`/`er2` remains intact.
+Erhua transforms the final before adding its one tone contour: dental nasal/front
+offglide loss, velar-nasal loss with nasalization, and rhotic vowel/offglide forms.
+It uses `ɚ` / `ɚ̯` from the model inventory instead of appending an ASCII `r` or
+an independently toned `er`. These are broad Mandarin rules, not regional accent
+variants; unsupported finals (including repeated erhua on `er`) return 422.
+See the [phonetic rule categories](https://www.atlantis-press.com/article/125988795.pdf), Table 2.
+
+Use whitespace between syllables inside one bracket. Tone-marked or trailing
+number forms (`ni3`, tones 1–4, 0/5 for neutral) are accepted; unmarked syllables
+are neutral. `ü`, `v` and `u:` are accepted. Conversion uses `pinyin-to-ipa==1.0.1`
+(first pronunciation variant), appends superscript tone contours, and checks
+against the loaded model's phoneme inventory. Existing explicit IPA groups and
+text outside brackets are preserved. With this feature active, brackets are
+reserved for pinyin: empty/nested/unbalanced groups, unsupported syllables or
+symbols return 422 before entering the inference queue. Phoneme text rows must
+be loaded (`ZONOS3_TEXT_ROWS` must not disable them).
+
+```json
+{"input":"[nǐ hǎo]，欢迎使用。", "voice":"file://alice", "language":"cmn"}
+```
+
+The emitted tones are instructions to the model; pronunciation has not been
+audio-validated. Unit tests are provided in `tests/test_pinyin.py` but were not run.
+
+### Optional readable IPA boundaries
+
+Set `ZONOS3_IPA_ENABLED=true` to use `{{kuɔ³⁵}}` in either speech or clone input.
+This independent switch defaults to false and applies to every supported language.
+It replaces the double braces with U+E000/U+E001; the contents are passed unchanged,
+without pinyin conversion, tone sandhi, trimming or Unicode normalization.
+
+```json
+{"input":"读音示例：{{kuɔ³⁵}}。", "voice":"file://alice", "language":"cmn"}
+```
+
+When both switches are enabled, `[nǐ hǎo]，{{kuɔ³⁵}}` combines Mandarin pinyin
+conversion with explicit IPA. IPA conversion runs first and the pinyin pass skips
+the resulting phoneme groups. Existing Unicode groups and ordinary text remain
+unchanged. Do not nest the two syntaxes. Empty, nested, unbalanced or unsupported
+IPA groups return 422 before inference; spaces, slash delimiters, Chinese text and
+ASCII tone digits are not valid inside these groups. Phoneme text rows must be
+loaded. Single ordinary braces are not delimiters. When disabled, `{{…}}` has no
+special meaning to this converter. Tests in `tests/test_ipa.py` have not been run.
+
+### Catalog files
 
 ```text
 voices/

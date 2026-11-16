@@ -7,3 +7,4 @@ av==12.3.0
 pyyaml>=6.0
 python-multipart>=0.0.18
 anyio>=4.0
+pinyin-to-ipa==1.0.1

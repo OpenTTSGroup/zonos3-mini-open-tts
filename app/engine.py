@@ -9,6 +9,8 @@ import anyio
 import numpy as np
 
 from .config import Settings
+from .ipa import convert_ipa
+from .pinyin import convert_pinyin
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +26,14 @@ def normalize_language(value: str) -> str:
 
 
 class TTSEngine:
+    def prepare_text(self, text: str, *, language: str) -> str:
+        spec = self.model.config.text_tokenizer_spec or {}
+        symbols = (spec.get("phonemes") or {}).get("symbols")
+        # Convert explicit IPA first; the pinyin pass skips Unicode IPA groups.
+        text = convert_ipa(text, enabled=self.settings.zonos3_ipa_enabled, symbols=symbols)
+        return convert_pinyin(text, enabled=self.settings.zonos3_pinyin_enabled,
+                              language=language, symbols=symbols)
+
     def __init__(self, settings: Settings) -> None:
         import torch
         from zonos3.generation import SAMPLE_RATE

@@ -94,6 +94,13 @@ def _voice(name: str, request: Request) -> Voice:
     return voice
 
 
+def _prepare_text(text: str, options: dict, engine: TTSEngine) -> str:
+    try:
+        return engine.prepare_text(text, language=options["language"])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 async def _render(job: Awaitable[np.ndarray], rate: int, fmt: str) -> Response:
     try:
         samples = await job
@@ -150,8 +157,9 @@ async def speech(req: SpeechRequest, request: Request) -> Response:
     options = _options(req, request)
     voice = await anyio.to_thread.run_sync(_voice, req.voice, request)
     engine = _engine(request)
+    text = _prepare_text(req.input, options, engine)
     async with request.app.state.limiter.acquire():
-        return await _render(engine.synthesize_clone(req.input, ref_audio=str(voice.wav_path),
+        return await _render(engine.synthesize_clone(text, ref_audio=str(voice.wav_path),
             ref_text=voice.prompt_text, ref_mtime=voice.mtime, speed=req.speed,
             instructions=req.instructions, **options), engine.sample_rate,
             req.response_format or settings.default_response_format)
@@ -170,6 +178,7 @@ async def clone(request: Request, req: CloneRequest = Depends()) -> Response:
         if suffix not in CLONE_AUDIO_EXTS:
             raise HTTPException(415, "unsupported reference audio format")
         engine = _engine(request)
+        text = _prepare_text(req.input, options, engine)
         with tempfile.NamedTemporaryFile(prefix="zonos3-ref-", suffix=suffix, delete=False) as dest:
             tmp = Path(dest.name)
             size = 0
@@ -181,7 +190,7 @@ async def clone(request: Request, req: CloneRequest = Depends()) -> Response:
         if size == 0:
             raise HTTPException(400, "audio file is empty")
         async with request.app.state.limiter.acquire():
-            return await _render(engine.synthesize_clone(req.input, ref_audio=str(tmp), ref_text=req.prompt_text,
+            return await _render(engine.synthesize_clone(text, ref_audio=str(tmp), ref_text=req.prompt_text,
                 speed=req.speed, instructions=req.instructions, **options), engine.sample_rate,
                 req.response_format or settings.default_response_format)
     finally:
